@@ -1,0 +1,66 @@
+{
+  "name": "floating-music-player",
+  "version": "0.1.0",
+  "description": "Always-on-top mini-player for Spotify and YouTube Music",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "electron-vite build && electron-builder --win",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "pack": "electron-vite build && electron-builder --win --dir",
+    "pack:firefox": "node scripts/pack-firefox.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/ws": "^8.18.2",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.2"
+  },
+  "build": {
+    "appId": "be.boopgames.floatingmusicplayer",
+    "productName": "Floating Music Player",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "extension",
+        "to": "extension"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ]
+  },
+  "dependencies": {
+    "remixicon": "^4.9.1",
+    "ws": "^8.22.0"
+  }
+}

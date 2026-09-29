@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+    <title>Floating Music Player</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section id="setup" hidden>
+        <p id="setup-msg"></p>
+        <input id="client-id" placeholder="Spotify Client ID" spellcheck="false" />
+        <button id="setup-btn"></button>
+        <button id="skip-btn" class="link">Skip - I only use YouTube Music</button>
+      </section>
+
+      <section id="player" hidden>
+        <div class="row">
+          <img id="art" alt="" />
+          <div class="right">
+            <div class="drag top">
+              <span id="device"></span>
+              <span class="win-btns">
+                <button id="btn-extension" title="Install browser extension (YouTube volume &amp; seek)" hidden><i class="ri-puzzle-2-line"></i></button>
+                <button id="btn-connect" title="Connect Spotify" hidden><i class="ri-spotify-line"></i></button>
+                <button id="btn-albums" title="Albums &amp; playlists"><i class="ri-menu-line"></i></button>
+                <button id="btn-quit" title="Quit"><i class="ri-close-line"></i></button>
+              </span>
+            </div>
+            <div class="info">
+              <div id="title" class="title">Nothing playing</div>
+              <div id="artist" class="artist"></div>
+            </div>
+            <canvas id="wave" width="212" height="28"></canvas>
+            <input id="progress" type="range" min="0" max="1000" value="0" />
+            <div class="controls">
+              <button id="btn-prev" title="Previous"><i class="ri-skip-back-fill"></i></button>
+              <button id="btn-play" title="Play / Pause"><i class="ri-play-fill"></i></button>
+              <button id="btn-next" title="Next"><i class="ri-skip-forward-fill"></i></button>
+              <span class="vol">
+                <i id="vol-icon" class="ri-volume-up-line"></i>
+                <input id="volume" type="range" min="0" max="100" value="50" />
+              </span>
+            </div>
+          </div>
+        </div>
+        <div id="error" class="error" hidden></div>
+        <div id="albums" hidden></div>
+        <div id="ext-help" hidden>
+          <b>Connect your browser</b>
+          <ol id="ext-steps"></ol>
+          <p id="ext-note">This button disappears once the extension connects.</p>
+          <div class="ext-actions"><button id="ext-open">Open folder again</button><button id="ext-close">Close</button></div>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Floating Music Player Bridge",
+  "version": "0.1.1",
+  "description": "Lets the Floating Music Player desktop app show and control YouTube / YouTube Music (volume, seek, exact track info).",
+  "icons": { "128": "icon.png" },
+  "permissions": ["alarms"],
+  "host_permissions": ["https://music.youtube.com/*", "https://www.youtube.com/*"],
+  "background": { "scripts": ["background.js"] },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" },
+  "content_scripts": [
+    {
+      "matches": ["https://music.youtube.com/*", "https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "floating-music-player@boopgames.be",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    },
+    "gecko_android": { "strict_min_version": "142.0" }
+  }
+}
