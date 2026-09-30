@@ -1,7 +1,7 @@
-// Runs on YouTube / YouTube Music pages: reports playback state and executes commands.
+// Runs on YouTube / YouTube Music / Tidal pages: reports playback state and executes commands.
 ;(() => {
-  const site = location.hostname === 'music.youtube.com' ? 'ytmusic' : 'youtube'
-  const video = () => document.querySelector('video')
+  const site = /tidal\.com$/.test(location.hostname) ? 'tidal' : location.hostname === 'music.youtube.com' ? 'ytmusic' : 'youtube'
+  const video = () => document.querySelector('video, audio')
   const click = (sel) => {
     const el = document.querySelector(sel)
     if (el) el.click()
@@ -9,7 +9,7 @@
   }
 
   function isWatchPage() {
-    return site === 'ytmusic' || location.pathname.startsWith('/watch') || location.pathname.startsWith('/shorts')
+    return site === 'ytmusic' || site === 'tidal' || location.pathname.startsWith('/watch') || location.pathname.startsWith('/shorts')
   }
 
   function snapshot() {
@@ -61,10 +61,10 @@
         v.volume = Math.max(0, Math.min(1, Number(msg.value) / 100))
         break
       case 'next':
-        click(site === 'ytmusic' ? 'ytmusic-player-bar .next-button' : '.ytp-next-button')
+        click(site === 'tidal' ? '[data-test="next"]' : site === 'ytmusic' ? 'ytmusic-player-bar .next-button' : '.ytp-next-button')
         break
       case 'prev':
-        if (!click(site === 'ytmusic' ? 'ytmusic-player-bar .previous-button' : '.ytp-prev-button')) v.currentTime = 0
+        if (!click(site === 'tidal' ? '[data-test="previous"]' : site === 'ytmusic' ? 'ytmusic-player-bar .previous-button' : '.ytp-prev-button')) v.currentTime = 0
         break
     }
     setTimeout(tick, 100)

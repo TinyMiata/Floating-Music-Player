@@ -1,4 +1,4 @@
-export type SourceId = 'spotify' | 'ytmusic' | 'youtube' | 'media'
+export type SourceId = 'spotify' | 'ytmusic' | 'youtube' | 'tidal' | 'media'
 
 export interface TrackState {
   source: SourceId

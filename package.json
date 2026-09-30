@@ -1,7 +1,7 @@
 {
   "name": "floating-music-player",
-  "version": "0.1.0",
-  "description": "Always-on-top mini-player for Spotify and YouTube Music",
+  "version": "0.2.0",
+  "description": "Always-on-top mini-player for Spotify, Tidal and YouTube Music",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

@@ -1,6 +1,8 @@
 :root { --bg: rgba(18,18,18,.94); --fg: #fff; --dim: #b3b3b3; --green: #1db954; --green-hover: #1ed760; }
 /* YouTube (and other browser media) gets a red accent */
 :root[data-source="ytmusic"], :root[data-source="youtube"], :root[data-source="media"] { --green: #ff2d3f; --green-hover: #ff5a68; }
+/* Tidal gets a cyan accent */
+:root[data-source="tidal"] { --green: #00d4ff; --green-hover: #4de1ff; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font: 13px "Segoe UI", sans-serif; color: var(--fg); user-select: none; }
 #app { height: 100%; background: var(--bg); border-radius: 12px; padding: 8px 12px; overflow: hidden; }

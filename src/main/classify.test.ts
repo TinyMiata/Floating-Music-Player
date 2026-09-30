@@ -5,6 +5,8 @@ const s = (id: string, album = '', artist = 'X') => ({ id, album, artist })
 
 describe('classify', () => {
   it('detects Spotify desktop', () => expect(classify(s('Spotify.exe'))).toBe('spotify'))
+  it('detects the Tidal desktop app', () => expect(classify(s('TIDAL.exe'))).toBe('tidal'))
+  it('detects the Tidal Store app id', () => expect(classify(s('TIDALPlayer.TIDAL_abc!App'))).toBe('tidal'))
   it('detects the YouTube Music desktop app', () => expect(classify(s('th-ch.YoutubeMusic'))).toBe('ytmusic'))
   it('detects a browser song by its album', () => expect(classify(s('chrome.exe', 'Album'))).toBe('ytmusic'))
   it('detects a Topic artist channel', () => expect(classify(s('msedge.exe', '', 'Daft Punk - Topic'))).toBe('ytmusic'))

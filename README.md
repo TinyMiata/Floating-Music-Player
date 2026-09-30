@@ -1,11 +1,11 @@
 # Floating Music Player
 
-An always-on-top Windows mini-player that shows what you're playing on **Spotify** or **YouTube / YouTube Music**, with a live soundwave, progress and volume sliders, play/pause/next/previous, and a quick album/playlist picker (Spotify).
+An always-on-top Windows mini-player that shows what you're playing on **Spotify**, **Tidal** or **YouTube / YouTube Music**, with a live soundwave, progress and volume sliders, play/pause/next/previous, and a quick album/playlist picker (Spotify).
 
 ## How it gets its data
 - **Spotify Web API** (Premium): now playing, controls, volume, saved albums and playlists.
-- **Windows media sessions (SMTC)**: any app that reports to Windows, no login needed.
-- **Browser extension** (`extension/`): exact track info, volume and seek for YouTube / YouTube Music in Chrome-family browsers and Firefox.
+- **Windows media sessions (SMTC)**: any app that reports to Windows, no login needed. This is how the Tidal desktop app is picked up.
+- **Browser extension** (`extension/`): exact track info, volume and seek for YouTube, YouTube Music and the Tidal web player (listen.tidal.com) in Chrome-family browsers and Firefox.
 
 ## Development
 ```

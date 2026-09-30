@@ -5,7 +5,7 @@ const STALE_MS = 3500
 
 export interface ExtTab {
   tabId: number
-  site: 'ytmusic' | 'youtube'
+  site: 'ytmusic' | 'youtube' | 'tidal'
   title: string
   artist: string
   album: string
@@ -98,7 +98,7 @@ export class BrowserBridge {
     } else if (m.type === 'state' && typeof m.tabId === 'number') {
       this.tabs.set(m.tabId, {
         tabId: m.tabId,
-        site: m.site === 'ytmusic' ? 'ytmusic' : 'youtube',
+        site: m.site === 'ytmusic' || m.site === 'tidal' ? m.site : 'youtube',
         title: String(m.title ?? ''),
         artist: String(m.artist ?? ''),
         album: String(m.album ?? ''),

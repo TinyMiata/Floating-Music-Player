@@ -60,7 +60,7 @@ function fromSession(s: MediaSession, kind: SourceKind): TrackState {
 
 function fromExtTab(t: ExtTab): TrackState {
   return {
-    source: t.site === 'ytmusic' ? 'ytmusic' : 'youtube',
+    source: t.site,
     canVolume: true,
     canSeek: t.durMs > 0,
     canLibrary: false,

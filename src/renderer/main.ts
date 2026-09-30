@@ -22,7 +22,7 @@ const volume = $<HTMLInputElement>('volume')
 const errorEl = $('error')
 const albumsEl = $('albums')
 
-const SOURCE_LABEL = { spotify: 'Spotify', ytmusic: 'YouTube Music', youtube: 'YouTube', media: 'Browser / Media' } as const
+const SOURCE_LABEL = { spotify: 'Spotify', ytmusic: 'YouTube Music', youtube: 'YouTube', tidal: 'Tidal', media: 'Browser / Media' } as const
 let skipped = false
 let forceSetup = false // set by the connect button so setup shows even while music plays
 try {
@@ -88,9 +88,9 @@ function render(u: PlayerUpdate): void {
   progress.disabled = !!t && !t.canSeek
   $('btn-play').innerHTML = t?.isPlaying ? '<i class="ri-pause-fill"></i>' : '<i class="ri-play-fill"></i>'
   viz.playing = !!t?.isPlaying
-  const red = !!t && t.source !== 'spotify'
+  const red = !!t && t.source !== 'spotify' && t.source !== 'tidal'
   document.documentElement.dataset.source = t?.source ?? 'spotify'
-  viz.colors = red ? ['#ff2d3f', '#ff9aa4'] : ['#1db954', '#8affb0']
+  viz.colors = t?.source === 'tidal' ? ['#00d4ff', '#a6ecff'] : red ? ['#ff2d3f', '#ff9aa4'] : ['#1db954', '#8affb0']
 
   if (t?.imageUrl) {
     if (art.src !== t.imageUrl) art.src = t.imageUrl

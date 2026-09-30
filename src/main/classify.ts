@@ -14,10 +14,11 @@ export interface MediaSession {
   thumb?: string
 }
 
-export type SourceKind = 'spotify' | 'ytmusic' | 'media'
+export type SourceKind = 'spotify' | 'ytmusic' | 'tidal' | 'media'
 
 // Chrome/Edge report an opaque hashed id (e.g. F0DC299D809B9700) instead of an exe name
 const BROWSER = /chrome|msedge|edge|firefox|brave|opera|vivaldi|arc|^[0-9A-F]{16}$/i
+const TIDAL_APP = /tidal/i
 const YTM_APP = /youtube[-_. ]?music|th-ch|ytmd|music\.youtube/i
 
 export const isBrowserId = (id: string): boolean => BROWSER.test(id)
@@ -31,6 +32,7 @@ export const isBrowserId = (id: string): boolean => BROWSER.test(id)
  */
 export function classify(s: Pick<MediaSession, 'id' | 'album' | 'artist'>, anyBrowser = false): SourceKind {
   if (/spotify/i.test(s.id)) return 'spotify'
+  if (TIDAL_APP.test(s.id)) return 'tidal'
   if (YTM_APP.test(s.id)) return 'ytmusic'
   if (BROWSER.test(s.id) && (anyBrowser || s.album.trim() !== '' || /- Topic$/i.test(s.artist.trim()))) return 'ytmusic'
   return 'media'
