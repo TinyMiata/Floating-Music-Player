@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, nativeImage, screen, session, shell, Tray } from 'electron'
 import { join } from 'path'
-import { copyFileSync, cpSync } from 'fs'
+import { copyFileSync, cpSync, existsSync, readFileSync } from 'fs'
 import { clearTokens, getClientId, loadSettings, loadTokens, saveSettings } from './config'
 import { login } from './auth'
 import * as spotify from './spotify'
@@ -23,6 +23,18 @@ let browser: BrowserBridge | null = null
 let lastError: string | null = null
 let pollTimer: NodeJS.Timeout | null = null
 let loggingIn = false
+
+/** Copies the bundled extension to a stable, user-visible folder so "Load unpacked" keeps working after app updates */
+function syncExtension(): string {
+  const src = app.isPackaged ? join(process.resourcesPath, 'extension') : join(app.getAppPath(), 'extension')
+  const dest = join(app.getPath('userData'), 'browser-extension')
+  const manifest = join(dest, 'manifest.json')
+  // Firefox has no MV3 service workers, so a Firefox install keeps its own manifest
+  const wasFirefox = existsSync(manifest) && readFileSync(manifest, 'utf8').includes('"gecko"')
+  cpSync(src, dest, { recursive: true })
+  if (wasFirefox) copyFileSync(join(dest, 'manifest.firefox.json'), manifest)
+  return dest
+}
 
 function authStatus(): AuthStatus {
   if (!getClientId()) return 'needs-client-id'
@@ -292,10 +304,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('auth:show-setup', () => push())
   ipcMain.handle('ext:install', async (): Promise<ExtInstallInfo> => {
-    // Copy to a stable, user-visible folder so "Load unpacked" keeps working after app updates
-    const src = app.isPackaged ? join(process.resourcesPath, 'extension') : join(app.getAppPath(), 'extension')
-    const dest = join(app.getPath('userData'), 'browser-extension')
-    cpSync(src, dest, { recursive: true })
+    const dest = syncExtension()
 
     const b = await detectDefaultBrowser()
     if (b.kind === 'firefox') {
@@ -349,13 +358,10 @@ function registerIpc(): void {
     if (url) clipboard.writeText(url)
     return !!url
   }
-  ipcMain.handle('player:copy-link', copyLink)
   ipcMain.handle('player:menu', () => {
     const has = !!pickActive()?.track.url
     Menu.buildFromTemplate([
-      { label: 'Copy song link', enabled: has, click: () => copyLink() },
-      { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() }
+      { label: 'Copy link', enabled: has, click: () => copyLink() }
     ]).popup({ window: win ?? undefined })
   })
   ipcMain.handle('player:seek', (_, ms: number) => {
@@ -404,6 +410,14 @@ function registerIpc(): void {
 if (!app.requestSingleInstanceLock()) app.quit()
 
 app.whenReady().then(() => {
+  // Keep an already-installed extension copy current (the browser just needs a reload to pick it up)
+  if (existsSync(join(app.getPath('userData'), 'browser-extension'))) {
+    try {
+      syncExtension()
+    } catch {
+      /* folder may be locked by the browser; the next launch retries */
+    }
+  }
   // System-audio loopback for the visualizer (Windows)
   session.defaultSession.setDisplayMediaRequestHandler((_req, callback) => {
     desktopCapturer

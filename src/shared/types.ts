@@ -60,8 +60,6 @@ export interface FloatingApi {
   previous(): Promise<void>
   setVolume(percent: number): Promise<void>
   seek(ms: number): Promise<void>
-  /** Copies the current song's link to the clipboard; resolves false when there is none */
-  copyLink(): Promise<boolean>
   /** Shows the native right-click menu */
   showMenu(): Promise<void>
   listLibrary(): Promise<AlbumItem[]>

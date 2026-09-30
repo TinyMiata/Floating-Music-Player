@@ -18,7 +18,6 @@ const api: FloatingApi = {
   previous: () => invoke('player:previous'),
   setVolume: (p) => invoke('player:volume', p),
   seek: (ms) => invoke('player:seek', ms),
-  copyLink: () => invoke('player:copy-link'),
   showMenu: () => invoke('player:menu'),
   listLibrary: () => invoke('library:list'),
   playContext: (uri) => invoke('library:play', uri),

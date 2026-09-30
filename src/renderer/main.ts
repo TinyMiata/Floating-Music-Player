@@ -83,7 +83,6 @@ function render(u: PlayerUpdate): void {
     ? [SOURCE_LABEL[t.source], t.deviceName].filter(Boolean).join(' - ')
     : 'Floating Music Player'
   $('btn-connect').hidden = u.auth === 'logged-in'
-  $('btn-link').hidden = !t?.url
   // Only offer the button when browser media is playing without the extension; hide the help once it connects
   $('btn-extension').hidden = !u.extensionNeeded
   if (u.extension && !$('ext-help').hidden) toggleExtHelp(false)
@@ -288,14 +287,6 @@ $('btn-extension').addEventListener('click', () => {
 $('ext-open').addEventListener('click', () => void startExtensionInstall())
 $('ext-close').addEventListener('click', () => toggleExtHelp(false))
 $('btn-albums').addEventListener('click', () => toggleAlbums(!albumsOpen))
-let linkTimer: number | undefined
-$('btn-link').addEventListener('click', async () => {
-  if (!(await api.copyLink())) return
-  const b = $('btn-link')
-  b.innerHTML = '<i class="ri-check-line"></i>'
-  window.clearTimeout(linkTimer)
-  linkTimer = window.setTimeout(() => (b.innerHTML = '<i class="ri-link"></i>'), 1200)
-})
 window.addEventListener('contextmenu', (e) => {
   e.preventDefault()
   void api.showMenu()
