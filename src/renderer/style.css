@@ -5,7 +5,7 @@
 :root[data-source="tidal"] { --green: #00d4ff; --green-hover: #4de1ff; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font: 13px "Segoe UI", sans-serif; color: var(--fg); user-select: none; }
-#app { transition: padding .26s cubic-bezier(.645,.045,.355,1); height: 100%; background: var(--bg); border-radius: 12px; padding: 8px 12px; overflow: hidden; }
+#app { transition: padding .26s cubic-bezier(.645,.045,.355,1); height: 100%; background: var(--bg); border-radius: 12px; padding: 8px 12px 8px 8px; overflow: hidden; }
 [hidden] { display: none !important; }
 button { background: none; border: 0; color: var(--fg); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 6px; -webkit-app-region: no-drag; }
 button i { display: block; line-height: 1; }
@@ -16,7 +16,7 @@ button:hover { background: rgba(255,255,255,.12); }
 .row { position: relative; display: flex; gap: 12px; height: 134px; transition: height .26s cubic-bezier(.645,.045,.355,1); }
 #art-wrap { position: relative; z-index: 1; width: 134px; height: 134px; flex: none; transition: width .26s cubic-bezier(.645,.045,.355,1), height .26s cubic-bezier(.645,.045,.355,1); }
 #art { display: block; width: 134px; height: 134px; border-radius: 8px; transition: width .26s cubic-bezier(.645,.045,.355,1), height .26s cubic-bezier(.645,.045,.355,1), border-radius .26s cubic-bezier(.645,.045,.355,1); background: #333; object-fit: cover; flex: none; }
-.right { position: absolute; left: 146px; right: 0; top: 0; bottom: 0; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; transition: transform .25s ease .2s, opacity .25s ease .2s; }
+.right { position: absolute; left: 146px; right: 0; top: 0; bottom: 0; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; transition: transform .22s cubic-bezier(.645,.045,.355,1) .26s, opacity .22s cubic-bezier(.645,.045,.355,1) .26s; }
 .info { min-width: 0; }
 .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .artist { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -64,18 +64,22 @@ input[type=range]:disabled { opacity: .35; }
 #btn-cover::after { content: ''; position: absolute; inset: -8px; }
 #btn-cover:hover { background: rgba(0,0,0,.85); }
 #btn-cover:hover i { transform: scale(1.1); }
+body.cover #btn-cover:hover { background: none; }
 #art-wrap:hover #btn-cover { opacity: 1; }
 #cover-controls, #cover-info, .handle, #wave-radial { display: none; }
 #art { -webkit-user-drag: none; }
-body.cover #app { padding: 0; transition-delay: .15s; }
+body.cover #app { padding: 0; transition-duration: .22s; }
 body.cover #player, body.cover .row { height: 100%; }
-body.cover .row { transition-delay: .15s; }
+body.cover .row { transition-duration: .22s; }
 body.cover .row { gap: 0; }
 body.cover #albums, body.cover #error, body.cover #ext-help { display: none; }
-body.cover #art-wrap { width: 100%; height: 100%; transition-delay: .15s; }
-/* Entering cover: the text slides out underneath the art first, then the art takes over */
-body.cover .right { transform: translateX(-130px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .22s ease, opacity .22s ease, visibility 0s .22s; }
-body.cover #art { width: 100%; height: 100%; border-radius: 0; cursor: move; transition-delay: .15s; }
+/* Phase 1 of entering: art grows to the art-only window (150x150) while the text collapses; then .fill takes over and follows the window */
+body.cover #art-wrap { width: 150px; height: 150px; transition-duration: .22s; }
+body.cover.fill #app, body.cover.fill .row, body.cover.fill #art-wrap, body.cover.fill #art { transition: none; }
+body.cover.fill #art-wrap { width: 100%; height: 100%; }
+/* Entering cover: the text collapses under the art first (window narrows with it), then the art grows */
+body.cover .right { transform: translateX(-130px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .22s cubic-bezier(.645,.045,.355,1), opacity .22s cubic-bezier(.645,.045,.355,1), visibility 0s .22s; }
+body.cover #art { width: 100%; height: 100%; border-radius: 0; cursor: move; transition-duration: .22s; }
 body.cover #wave-radial { display: block; mix-blend-mode: difference; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 body.cover #cover-controls { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .15s; pointer-events: none; }
 body.cover #cover-controls button { pointer-events: auto; font-size: 28px; padding: 8px; border-radius: 50%; background: rgba(0,0,0,.45); }
@@ -96,3 +100,9 @@ body.cover .handle { display: block; position: absolute; width: 18px; height: 18
 .handle.se { bottom: 0; right: 0; cursor: nwse-resize; }
 .handle.ne { top: 0; right: 0; cursor: nesw-resize; }
 .handle.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+
+/* Resize grip for the normal player (cover mode resizes from its corner handles) */
+#grip { position: fixed; right: 0; bottom: 0; width: 16px; height: 16px; z-index: 20; cursor: nwse-resize; opacity: 0; transition: opacity .15s; background: linear-gradient(135deg, transparent 55%, var(--dim) 55%, var(--dim) 65%, transparent 65%, transparent 75%, var(--dim) 75%, var(--dim) 85%, transparent 85%); border-bottom-right-radius: 12px; }
+body:hover #grip { opacity: .55; }
+#grip:hover { opacity: 1 !important; }
+body.cover #grip { display: none; }

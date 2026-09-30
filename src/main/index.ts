@@ -17,7 +17,14 @@ const EXPANDED = { width: 380, height: 430 }
 
 let win: BrowserWindow | null = null
 let coverMode = false
-let gesture: { kind: 'move' | Corner; start: Electron.Rectangle } | null = null
+let gesture: { kind: 'move' | 'grip' | Corner; start: Electron.Rectangle; cursor: Electron.Point; active: boolean } | null = null
+// The whole UI scales with the window: page zoom keeps the layout at its base size (380px wide player / 260px square cover)
+const COMPACT_SCALE_MIN = 0.6
+const COMPACT_SCALE_MAX = 2.5
+let compactScale = 1
+let coverScale = 1
+const uiZoom = (): number => (coverMode ? coverScale : compactScale)
+const scaled = (s: { width: number; height: number }, k: number) => ({ width: Math.round(s.width * k), height: Math.round(s.height * k) })
 let tray: Tray | null = null
 let spotifyTrack: TrackState | null = null
 let sessions: MediaSession[] = []
@@ -98,11 +105,11 @@ function fromExtTab(t: ExtTab): TrackState {
 
 function candidates(): Candidate[] {
   const list: Candidate[] = []
-  if (spotifyTrack) list.push({ key: 'api', track: spotifyTrack, backend: 'api' })
+  if (spotifyTrack && !spotify.rateLimitedUntil()) list.push({ key: 'api', track: spotifyTrack, backend: 'api' })
   // The extension reports browser tabs exactly, so it replaces the guesswork from Windows sessions
   const extTabs = browser?.liveTabs() ?? []
   for (const t of extTabs) list.push({ key: `ext:${t.tabId}`, track: fromExtTab(t), backend: 'ext', tabId: t.tabId })
-  const apiCoversSpotify = authStatus() === 'logged-in'
+  const apiCoversSpotify = authStatus() === 'logged-in' && !spotify.rateLimitedUntil()
   const anyBrowser = !!loadSettings().ytmAnyBrowser
   for (const s of sessions) {
     const kind = classify(s, anyBrowser)
@@ -114,12 +121,19 @@ function candidates(): Candidate[] {
   return list
 }
 
-/** Prefer whatever is playing; stay on the current source until it stops. */
+const wasPlaying = new Map<string, boolean>()
+let pickedOnce = false
+
+/** Prefer whatever just started playing, else stay on the current source until it stops. */
 function pickActive(): Candidate | null {
   const all = candidates()
+  // A source that starts playing (or appears already playing) takes over, so a tab that stays "playing" can't hold the slot forever
+  const started = pickedOnce ? all.find((c) => c.track.isPlaying && !wasPlaying.get(c.key)) : undefined
+  wasPlaying.clear()
+  for (const c of all) wasPlaying.set(c.key, c.track.isPlaying)
+  pickedOnce = true
   const current = all.find((c) => c.key === activeKey)
-  if (current?.track.isPlaying) return current
-  const pick = all.find((c) => c.track.isPlaying) ?? current ?? all[0] ?? null
+  const pick = started ?? (current?.track.isPlaying ? current : (all.find((c) => c.track.isPlaying) ?? current ?? all[0] ?? null))
   activeKey = pick?.key ?? null
   return pick
 }
@@ -138,7 +152,7 @@ function extensionNeeded(): boolean {
   return Date.now() - extMissingSince > EXT_GRACE_MS
 }
 
-const BROWSER_EXES = ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe']
+const BROWSER_EXES = ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe', 'zen.exe', 'librewolf.exe', 'waterfox.exe', 'floorp.exe', 'thorium.exe']
 
 /** Which apps' audio the visualizer should follow, or null when that can't be told (it then hears the whole PC) */
 function audioTargets(c: Candidate | null): string[] | null {
@@ -179,6 +193,14 @@ async function poll(): Promise<void> {
       spotifyTrack = null
     }
     if (err.status !== 429) lastError = err.message
+    else {
+      const until = spotify.rateLimitedUntil()
+      // Short limits clear themselves; a long one needs telling, or it just looks like Spotify stopped working
+      if (until - Date.now() > 60_000) {
+        spotifyTrack = null
+        lastError = `Spotify rate-limited until ${new Date(until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
+      }
+    }
   }
   push()
 }
@@ -223,25 +245,38 @@ async function control(fn: () => Promise<unknown>, optimistic?: () => void): Pro
   push()
 }
 
-const COVER_ENTER_DELAY_MS = 150
+const ART_ONLY_WIDTH = 150 // the art-only window: 134px art + 8px padding each side
+const TEXT_MS = 220 // text sliding away / back (matches .right in style.css)
 const COVER_ANIM_MS = 260
 let boundsTimer: NodeJS.Timeout | null = null
 
-/** Windows can't animate a window resize by itself, so step the bounds (same easing as the page's CSS transitions) */
-function animateBounds(to: Electron.Rectangle, delayMs: number): void {
+const ease = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
+
+/** Windows can't animate a window resize by itself, so step the bounds through consecutive segments (same easing as the page's CSS transitions) */
+function animateBounds(steps: { to: Electron.Rectangle; ms: number }[], zoom: [number, number]): void {
   if (boundsTimer) clearInterval(boundsTimer)
-  const ease = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
   const lerp = (a: number, b: number, e: number) => Math.round(a + (b - a) * e)
-  const begin = Date.now() + delayMs
   win?.setResizable(true)
-  const from = win?.getBounds()
+  let from = win?.getBounds()
   if (!from) return
+  const segments: { from: Electron.Rectangle; to: Electron.Rectangle; start: number; ms: number }[] = []
+  let t = Date.now()
+  for (const step of steps) {
+    segments.push({ from, to: step.to, start: t, ms: step.ms })
+    from = step.to
+    t += step.ms
+  }
+  const end = t
+  const begin = segments[0].start
   boundsTimer = setInterval(() => {
     if (!win) return void (boundsTimer && clearInterval(boundsTimer))
-    const p = Math.max(0, Math.min(1, (Date.now() - begin) / COVER_ANIM_MS))
-    const e = ease(p)
-    win.setBounds({ x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), width: lerp(from.width, to.width, e), height: lerp(from.height, to.height, e) })
-    if (p >= 1) {
+    const now = Date.now()
+    const seg = segments.find((s) => now < s.start + s.ms) ?? segments[segments.length - 1]
+    const e = ease(Math.max(0, Math.min(1, (now - seg.start) / seg.ms)))
+    // The page scale follows the whole animation so the layout never jumps
+    win.webContents.setZoomFactor(zoom[0] + (zoom[1] - zoom[0]) * ease(Math.max(0, Math.min(1, (now - begin) / (end - begin)))))
+    win.setBounds({ x: lerp(seg.from.x, seg.to.x, e), y: lerp(seg.from.y, seg.to.y, e), width: lerp(seg.from.width, seg.to.width, e), height: lerp(seg.from.height, seg.to.height, e) })
+    if (now >= end) {
       if (boundsTimer) clearInterval(boundsTimer)
       boundsTimer = null
       win.setResizable(false)
@@ -253,7 +288,10 @@ function createWindow(): void {
   const settings = loadSettings()
   const area = screen.getPrimaryDisplay().workArea
   coverMode = !!settings.coverMode
-  const size = coverMode ? { width: clampSize(settings.coverSize ?? COVER_DEFAULT), height: clampSize(settings.coverSize ?? COVER_DEFAULT) } : COMPACT
+  compactScale = Math.max(COMPACT_SCALE_MIN, Math.min(COMPACT_SCALE_MAX, settings.compactScale ?? 1))
+  const coverSide = clampSize(settings.coverSize ?? COVER_DEFAULT)
+  coverScale = coverSide / COVER_DEFAULT
+  const size = coverMode ? { width: coverSide, height: coverSide } : scaled(COMPACT, compactScale)
   win = new BrowserWindow({
     ...size,
     x: settings.windowX ?? area.x + area.width - size.width - 20,
@@ -280,7 +318,10 @@ function createWindow(): void {
   if (process.env['ELECTRON_RENDERER_URL']) void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 
-  win.webContents.on('did-finish-load', push)
+  win.webContents.on('did-finish-load', () => {
+    win?.webContents.setZoomFactor(uiZoom())
+    push()
+  })
   win.on('moved', () => {
     if (!win) return
     const [x, y] = win.getPosition()
@@ -436,7 +477,7 @@ function registerIpc(): void {
 
   ipcMain.handle('window:expand', (_, expanded: boolean) => {
     if (coverMode) return
-    const size = expanded ? EXPANDED : COMPACT
+    const size = scaled(expanded ? EXPANDED : COMPACT, compactScale)
     win?.setResizable(true)
     win?.setSize(size.width, size.height)
     win?.setResizable(false)
@@ -452,42 +493,79 @@ function registerIpc(): void {
     if (!win || on === coverMode) return
     coverMode = on
     const side = clampSize(loadSettings().coverSize ?? COVER_DEFAULT)
-    const size = on ? { width: side, height: side } : COMPACT
+    coverScale = side / COVER_DEFAULT
+    const zoom: [number, number] = [win.webContents.getZoomFactor(), uiZoom()]
     const b = win.getBounds()
     const area = screen.getDisplayMatching(b).workArea
-    const target = {
-      x: Math.max(area.x, Math.min(b.x, area.x + area.width - size.width)),
-      y: Math.max(area.y, Math.min(b.y, area.y + area.height - size.height)),
-      ...size
-    }
+    const keepOnScreen = (r: Electron.Rectangle): Electron.Rectangle => ({
+      ...r,
+      x: Math.max(area.x, Math.min(r.x, area.x + area.width - r.width)),
+      y: Math.max(area.y, Math.min(r.y, area.y + area.height - r.height))
+    })
+    // The cover grows out of (and shrinks back into) the middle of the album art, not the window's top-left corner
+    const z = compactScale
+    const artOnlyW = Math.round(ART_ONLY_WIDTH * z)
+    const artOnlyH = Math.round(COMPACT.height * z)
+    const padDiff = Math.round(4 * z) // the normal player pads its art 12px from the left, the art-only box 8px
+    const artOnly: Electron.Rectangle = on
+      ? { x: b.x + padDiff, y: b.y, width: artOnlyW, height: artOnlyH }
+      : { x: Math.round(b.x + b.width / 2 - artOnlyW / 2), y: Math.round(b.y + b.height / 2 - artOnlyH / 2), width: artOnlyW, height: artOnlyH }
+    const cx = artOnly.x + artOnly.width / 2
+    const cy = artOnly.y + artOnly.height / 2
+    const target = keepOnScreen(
+      on
+        ? { x: Math.round(cx - side / 2), y: Math.round(cy - side / 2), width: side, height: side }
+        : { x: artOnly.x - padDiff, y: artOnly.y, ...scaled(COMPACT, compactScale) }
+    )
     saveSettings({ coverMode: on, windowX: target.x, windowY: target.y })
     push() // the page starts its own transitions now
-    // Entering: let the text slide away under the art first, then grow. Leaving: shrink first, the text slides back after.
-    animateBounds(target, on ? COVER_ENTER_DELAY_MS : 0)
+    // Entering: the text collapses and the box follows it in, then grows to the square. Leaving: the square shrinks to the art, then the text and box open back up.
+    animateBounds(on ? [{ to: { ...artOnly, height: b.height }, ms: TEXT_MS }, { to: target, ms: COVER_ANIM_MS }] : [{ to: artOnly, ms: COVER_ANIM_MS }, { to: target, ms: TEXT_MS }], zoom)
   })
   // Dragging and corner-resizing are done here (not with -webkit-app-region) so clicks, wheel and the context menu still reach the page
-  ipcMain.handle('window:gesture-start', (_, kind: 'move' | Corner) => {
+  ipcMain.handle('window:gesture-start', (_, kind: 'move' | 'grip' | Corner) => {
     if (!win) return
-    gesture = { kind, start: win.getBounds() }
-    win.setResizable(true)
+    gesture = { kind, start: win.getBounds(), cursor: screen.getCursorScreenPoint(), active: false }
   })
-  ipcMain.handle('window:gesture-move', (_, dx: number, dy: number) => {
+  ipcMain.handle('window:gesture-move', () => {
     if (!win || !gesture) return
     const { kind, start } = gesture
+    // Measured here rather than sent from the page: with page zoom, pointer coordinates in the page no longer match window pixels
+    const cur = screen.getCursorScreenPoint()
+    const dx = cur.x - gesture.cursor.x
+    const dy = cur.y - gesture.cursor.y
+    if (!gesture.active) {
+      if (!dx && !dy) return // a plain click: leave the window alone (re-applying bounds can change its size)
+      gesture.active = true
+      win.setResizable(true) // a non-resizable window grows on every setBounds at fractional DPI scaling
+    }
     if (kind === 'move') {
       win.setBounds({ x: Math.round(start.x + dx), y: Math.round(start.y + dy), width: start.width, height: start.height })
       return
     }
+    if (kind === 'grip') {
+      if (coverMode) return
+      // Keep the player's proportions: the width follows the pointer, the height is derived from it
+      const width = Math.round(Math.max(COMPACT.width * COMPACT_SCALE_MIN, Math.min(COMPACT.width * COMPACT_SCALE_MAX, start.width + (dx + (dy * start.width) / start.height) / 2)))
+      compactScale = width / COMPACT.width
+      win.webContents.setZoomFactor(compactScale)
+      win.setBounds({ x: start.x, y: start.y, width, height: Math.round((width * start.height) / start.width) })
+      return
+    }
     if (!coverMode) return
     const sq: Square = resizeSquare({ x: start.x, y: start.y, size: start.width }, kind, dx, dy)
+    coverScale = sq.size / COVER_DEFAULT
+    win.webContents.setZoomFactor(coverScale)
     win.setBounds({ x: sq.x, y: sq.y, width: sq.size, height: sq.size })
   })
   ipcMain.handle('window:gesture-end', () => {
     if (!win || !gesture) return
+    const { kind, active } = gesture
     gesture = null
+    if (!active) return
     win.setResizable(false)
     const b = win.getBounds()
-    saveSettings({ windowX: b.x, windowY: b.y, ...(coverMode ? { coverSize: b.width } : {}) })
+    saveSettings({ windowX: b.x, windowY: b.y, ...(kind === 'move' ? {} : coverMode ? { coverSize: b.width } : { compactScale }) })
   })
   ipcMain.handle('window:opacity', (_, v: number) => {
     const opacity = Math.max(0.3, Math.min(1, v))

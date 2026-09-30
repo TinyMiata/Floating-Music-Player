@@ -74,7 +74,7 @@ export interface FloatingApi {
   /** Switches between the normal player and the square album-art-only cover mode */
   setCover(on: boolean): Promise<void>
   /** Starts dragging the window ('move') or resizing it from a corner; deltas are then sent with gestureMove */
-  gestureStart(kind: 'move' | 'nw' | 'ne' | 'sw' | 'se'): Promise<void>
+  gestureStart(kind: 'move' | 'grip' | 'nw' | 'ne' | 'sw' | 'se'): Promise<void>
   gestureMove(dx: number, dy: number): Promise<void>
   gestureEnd(): Promise<void>
   setOpacity(value: number): Promise<void>

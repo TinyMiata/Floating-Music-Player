@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Floating Music Player Bridge",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Lets the Floating Music Player desktop app show and control YouTube, YouTube Music and Tidal (volume, seek, exact track info).",
   "icons": { "128": "icon.png" },
   "permissions": ["alarms"],

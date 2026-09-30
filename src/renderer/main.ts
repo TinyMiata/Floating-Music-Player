@@ -78,8 +78,26 @@ function fitMarquee(el: HTMLElement): void {
 const marqueeObserver = new ResizeObserver((entries) => entries.forEach((e) => fitMarquee(e.target as HTMLElement)))
 document.querySelectorAll<HTMLElement>('.marquee').forEach((el) => marqueeObserver.observe(el))
 
+// While the window grows into the square, the art just fills it (no CSS transition of its own) so the two can't drift apart.
+// That starts once the text has collapsed and the window is art-sized (TEXT_MS in main/index.ts).
+let fillTimer: ReturnType<typeof setTimeout> | undefined
+let rendered = false
+function setCoverFill(cover: boolean, wasCover: boolean): void {
+  if (!cover) {
+    clearTimeout(fillTimer)
+    document.body.classList.remove('fill')
+  } else if (!rendered) {
+    document.body.classList.add('fill') // launched straight into cover mode
+  } else if (!wasCover) {
+    clearTimeout(fillTimer)
+    fillTimer = setTimeout(() => document.body.classList.add('fill'), 220)
+  }
+  rendered = true
+}
+
 function render(u: PlayerUpdate): void {
   update = u
+  setCoverFill(u.cover, coverMode)
   if (u.auth === 'logged-in') forceSetup = false
   coverMode = u.cover
   document.body.classList.toggle('cover', u.cover)
@@ -394,7 +412,7 @@ $('cover-play').addEventListener('click', () => void api.togglePlay())
 $('cover-next').addEventListener('click', () => void api.next())
 
 /** Drags the window (or resizes it from a corner) by streaming pointer deltas to the main process */
-function startGesture(e: PointerEvent, kind: 'move' | 'nw' | 'ne' | 'sw' | 'se'): void {
+function startGesture(e: PointerEvent, kind: 'move' | 'grip' | 'nw' | 'ne' | 'sw' | 'se'): void {
   if (e.button !== 0) return
   e.preventDefault() // stops the browser starting a native image/selection drag, which would cancel this gesture
   const el = e.currentTarget as HTMLElement
@@ -423,8 +441,19 @@ function startGesture(e: PointerEvent, kind: 'move' | 'nw' | 'ne' | 'sw' | 'se')
   el.addEventListener('pointerup', end)
   el.addEventListener('pointercancel', end)
 }
-$('art-wrap').addEventListener('pointerdown', (e) => {
-  if (coverMode && !(e.target as HTMLElement).closest('button, .handle')) startGesture(e, 'move')
+$('grip').addEventListener('pointerdown', (e) => startGesture(e, 'grip'))
+// Hold anywhere on the player to drag the window, except on controls (buttons, sliders, resize handles, album list, help text)
+$('app').addEventListener('pointerdown', (e) => {
+  if (player.hidden) return // the setup form has its own native drag region
+  if ((e.target as HTMLElement).closest('button, input, textarea, a, .handle, #grip, .album, #albums, #ext-help')) return
+  startGesture(e, 'move')
+})
+// Double-click anywhere on the player (except controls) switches between the player and cover mode
+document.addEventListener('dblclick', (e) => {
+  if (player.hidden) return
+  if ((e.target as HTMLElement).closest('button, input, textarea, .handle, #albums')) return
+  getSelection()?.removeAllRanges()
+  toggleCover()
 })
 document.querySelectorAll<HTMLElement>('.handle').forEach((h) => {
   h.addEventListener('pointerdown', (e) => startGesture(e, h.dataset.corner as 'nw' | 'ne' | 'sw' | 'se'))

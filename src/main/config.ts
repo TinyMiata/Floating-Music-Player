@@ -10,6 +10,10 @@ export interface Settings {
   ytmAnyBrowser?: boolean
   coverMode?: boolean
   coverSize?: number
+  /** Scale of the normal player relative to its 380px base width */
+  compactScale?: number
+  /** Epoch ms until which Spotify's Web API has told us to stay away (429 Retry-After); survives restarts */
+  spotifyRetryAfter?: number
 }
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json')

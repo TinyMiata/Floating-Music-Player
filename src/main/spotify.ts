@@ -1,4 +1,5 @@
 import { getAccessToken } from './auth'
+import { loadSettings, saveSettings } from './config'
 import type { AlbumItem, TrackState } from '../shared/types'
 
 const API = 'https://api.spotify.com/v1'
@@ -12,10 +13,16 @@ export class SpotifyError extends Error {
   }
 }
 
-let retryAfterUntil = 0
+let retryAfterUntil: number | null = null
+
+/** When Spotify said we may call again (0 if not limited). Persisted so restarting the app doesn't keep hammering a banned API. */
+export function rateLimitedUntil(): number {
+  retryAfterUntil ??= loadSettings().spotifyRetryAfter ?? 0
+  return retryAfterUntil > Date.now() ? retryAfterUntil : 0
+}
 
 async function call(method: string, path: string, body?: unknown): Promise<any> {
-  if (Date.now() < retryAfterUntil) throw new SpotifyError('Rate limited', 429)
+  if (rateLimitedUntil()) throw new SpotifyError('Rate limited', 429)
   const token = await getAccessToken()
   if (!token) throw new SpotifyError('Not authenticated', 401)
   const res = await fetch(`${API}${path}`, {
@@ -25,6 +32,7 @@ async function call(method: string, path: string, body?: unknown): Promise<any> 
   })
   if (res.status === 429) {
     retryAfterUntil = Date.now() + (Number(res.headers.get('retry-after')) || 5) * 1000
+    saveSettings({ spotifyRetryAfter: retryAfterUntil })
     throw new SpotifyError('Rate limited', 429)
   }
   if (res.status === 204) return null
