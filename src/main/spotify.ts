@@ -65,6 +65,7 @@ export async function getPlayback(): Promise<TrackState | null> {
     progressMs: j.progress_ms ?? 0,
     durationMs: item.duration_ms ?? 0,
     volume: j.device?.volume_percent ?? null,
+    url: item.external_urls?.spotify ?? null,
     deviceName: j.device?.name ?? null,
     sampledAt: Date.now()
   }

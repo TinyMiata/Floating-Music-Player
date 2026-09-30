@@ -46,6 +46,9 @@ const viz = new Visualizer($<HTMLCanvasElement>('wave'))
 let update: PlayerUpdate | null = null
 let dragging = false
 let volumeDragging = false
+/** Ignore volume echoed back by the player until this time, so stale reports don't yank the slider around mid-change */
+let volumeHoldUntil = 0
+const holdVolume = () => (volumeHoldUntil = Date.now() + 900)
 let albumsOpen = false
 let albumsLoaded = false
 
@@ -80,6 +83,7 @@ function render(u: PlayerUpdate): void {
     ? [SOURCE_LABEL[t.source], t.deviceName].filter(Boolean).join(' - ')
     : 'Floating Music Player'
   $('btn-connect').hidden = u.auth === 'logged-in'
+  $('btn-link').hidden = !t?.url
   // Only offer the button when browser media is playing without the extension; hide the help once it connects
   $('btn-extension').hidden = !u.extensionNeeded
   if (u.extension && !$('ext-help').hidden) toggleExtHelp(false)
@@ -98,7 +102,7 @@ function render(u: PlayerUpdate): void {
   } else {
     art.style.visibility = 'hidden'
   }
-  if (t?.volume != null && !volumeDragging) volume.value = String(t.volume)
+  if (t?.volume != null && !volumeDragging && Date.now() > volumeHoldUntil) volume.value = String(t.volume)
   volume.disabled = !t?.canVolume || t.volume == null
   volume.title = t && !t.canVolume ? `Volume can't be controlled for ${SOURCE_LABEL[t.source]}` : 'Volume'
   setFill(volume)
@@ -284,6 +288,18 @@ $('btn-extension').addEventListener('click', () => {
 $('ext-open').addEventListener('click', () => void startExtensionInstall())
 $('ext-close').addEventListener('click', () => toggleExtHelp(false))
 $('btn-albums').addEventListener('click', () => toggleAlbums(!albumsOpen))
+let linkTimer: number | undefined
+$('btn-link').addEventListener('click', async () => {
+  if (!(await api.copyLink())) return
+  const b = $('btn-link')
+  b.innerHTML = '<i class="ri-check-line"></i>'
+  window.clearTimeout(linkTimer)
+  linkTimer = window.setTimeout(() => (b.innerHTML = '<i class="ri-link"></i>'), 1200)
+})
+window.addEventListener('contextmenu', (e) => {
+  e.preventDefault()
+  void api.showMenu()
+})
 $('btn-quit').addEventListener('click', () => void api.quit())
 
 progress.addEventListener('input', () => {
@@ -304,15 +320,24 @@ const sendVolume = () => {
 }
 volume.addEventListener('input', () => {
   volumeDragging = true
+  holdVolume()
   setFill(volume)
   sendVolume()
 })
-volume.addEventListener('change', () => (volumeDragging = false))
+volume.addEventListener('change', () => {
+  volumeDragging = false
+  holdVolume()
+})
 
 // Mouse wheel over the window adjusts volume
+let volumeExact = 0
 player.addEventListener('wheel', (e) => {
   if (volume.disabled) return
-  volume.value = String(Math.max(0, Math.min(100, Number(volume.value) + (e.deltaY < 0 ? 5 : -5))))
+  // Scale by wheel delta (a notch is ~100) so trackpads and notched wheels both feel smooth
+  const step = Math.max(-5, Math.min(5, -e.deltaY / 20))
+  volumeExact = Math.max(0, Math.min(100, (Date.now() > volumeHoldUntil ? Number(volume.value) : volumeExact) + step))
+  volume.value = String(Math.round(volumeExact))
+  holdVolume()
   setFill(volume)
   sendVolume()
 })

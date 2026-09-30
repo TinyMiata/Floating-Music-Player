@@ -13,6 +13,8 @@ export interface TrackState {
   progressMs: number
   durationMs: number
   volume: number | null
+  /** Shareable link to the current song, when known */
+  url: string | null
   deviceName: string | null
   /** Timestamp (ms) at which progressMs was sampled */
   sampledAt: number
@@ -58,6 +60,10 @@ export interface FloatingApi {
   previous(): Promise<void>
   setVolume(percent: number): Promise<void>
   seek(ms: number): Promise<void>
+  /** Copies the current song's link to the clipboard; resolves false when there is none */
+  copyLink(): Promise<boolean>
+  /** Shows the native right-click menu */
+  showMenu(): Promise<void>
   listLibrary(): Promise<AlbumItem[]>
   playContext(uri: string): Promise<void>
   setExpanded(expanded: boolean): Promise<void>

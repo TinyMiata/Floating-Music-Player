@@ -53,6 +53,7 @@ function fromSession(s: MediaSession, kind: SourceKind): TrackState {
     progressMs: s.posMs,
     durationMs: s.durMs,
     volume: null,
+    url: null,
     deviceName: null,
     sampledAt: Date.now()
   }
@@ -72,6 +73,7 @@ function fromExtTab(t: ExtTab): TrackState {
     progressMs: t.posMs,
     durationMs: t.durMs,
     volume: t.volume,
+    url: t.url || null,
     deviceName: null,
     sampledAt: t.seenAt
   }
@@ -341,6 +343,20 @@ function registerIpc(): void {
     if (a?.backend === 'ext') return extControl('volume', a, p)
     if (a?.backend === 'smtc') return // no per-app volume for Windows media sessions
     return control(() => spotify.setVolume(p), () => spotifyTrack && (spotifyTrack = { ...spotifyTrack, volume: p }))
+  })
+  const copyLink = (): boolean => {
+    const url = pickActive()?.track.url
+    if (url) clipboard.writeText(url)
+    return !!url
+  }
+  ipcMain.handle('player:copy-link', copyLink)
+  ipcMain.handle('player:menu', () => {
+    const has = !!pickActive()?.track.url
+    Menu.buildFromTemplate([
+      { label: 'Copy song link', enabled: has, click: () => copyLink() },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() }
+    ]).popup({ window: win ?? undefined })
   })
   ipcMain.handle('player:seek', (_, ms: number) => {
     const a = pickActive()

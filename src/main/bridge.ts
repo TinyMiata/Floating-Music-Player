@@ -10,6 +10,7 @@ export interface ExtTab {
   artist: string
   album: string
   videoId: string
+  url: string
   imageUrl: string
   playing: boolean
   posMs: number
@@ -103,6 +104,7 @@ export class BrowserBridge {
         artist: String(m.artist ?? ''),
         album: String(m.album ?? ''),
         videoId: String(m.videoId ?? ''),
+        url: /^https:\/\//.test(m.url) ? String(m.url) : '',
         imageUrl: String(m.imageUrl ?? ''),
         playing: !!m.playing,
         posMs: Number(m.posMs) || 0,
