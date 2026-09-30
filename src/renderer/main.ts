@@ -41,7 +41,7 @@ function setFill(el: HTMLInputElement): void {
   }
 }
 
-const viz = new Visualizer($<HTMLCanvasElement>('wave'))
+const viz = new Visualizer($<HTMLCanvasElement>('wave'), $<HTMLCanvasElement>('wave-radial'))
 
 let update: PlayerUpdate | null = null
 let dragging = false
@@ -50,6 +50,7 @@ let volumeDragging = false
 let volumeHoldUntil = 0
 const holdVolume = () => (volumeHoldUntil = Date.now() + 900)
 let albumsOpen = false
+let coverMode = false
 let albumsLoaded = false
 
 const fmt = (ms: number) => {
@@ -57,10 +58,34 @@ const fmt = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
+/** Sets the text and, if it is wider than its box, makes it scroll back and forth so it can all be read */
+function setMarquee(el: HTMLElement, text: string): void {
+  const span = el.firstElementChild as HTMLElement
+  if (span.textContent !== text) span.textContent = text
+  fitMarquee(el)
+}
+function fitMarquee(el: HTMLElement): void {
+  const span = el.firstElementChild as HTMLElement
+  const over = span.scrollWidth - el.clientWidth
+  const scroll = el.clientWidth > 0 && over > 1
+  if (scroll) {
+    el.style.setProperty('--shift', `${-Math.ceil(over)}px`)
+    el.style.setProperty('--dur', `${Math.max(6, 4 + over / 25)}s`)
+  }
+  if (scroll !== el.classList.contains('scroll')) el.classList.toggle('scroll', scroll)
+}
+// The overlay is hidden outside cover mode and the window can be resized, so re-measure when its size changes
+const marqueeObserver = new ResizeObserver((entries) => entries.forEach((e) => fitMarquee(e.target as HTMLElement)))
+document.querySelectorAll<HTMLElement>('.marquee').forEach((el) => marqueeObserver.observe(el))
+
 function render(u: PlayerUpdate): void {
   update = u
   if (u.auth === 'logged-in') forceSetup = false
+  coverMode = u.cover
+  document.body.classList.toggle('cover', u.cover)
+  viz.radial = u.cover
   const needsSetup = u.auth !== 'logged-in' && (forceSetup || (!u.track && !skipped))
+  if (needsSetup && u.cover) void api.setCover(false) // the setup form doesn't fit a square
   setup.hidden = !needsSetup
   player.hidden = needsSetup
 
@@ -79,6 +104,8 @@ function render(u: PlayerUpdate): void {
   const t = u.track
   $('title').textContent = t?.title ?? 'Nothing playing'
   $('artist').textContent = t ? `${t.artist}${t.album ? ' - ' + t.album : ''}` : 'Open Spotify and press play'
+  setMarquee($('cover-title'), t?.title ?? '')
+  setMarquee($('cover-artist'), t?.artist ?? '')
   $('device').textContent = t
     ? [SOURCE_LABEL[t.source], t.deviceName].filter(Boolean).join(' - ')
     : 'Floating Music Player'
@@ -89,7 +116,12 @@ function render(u: PlayerUpdate): void {
   $('btn-albums').hidden = !(u.auth === 'logged-in' && (!t || t.canLibrary))
   if (albumsOpen && $('btn-albums').hidden) toggleAlbums(false)
   progress.disabled = !!t && !t.canSeek
-  $('btn-play').innerHTML = t?.isPlaying ? '<i class="ri-pause-fill"></i>' : '<i class="ri-play-fill"></i>'
+  const playIcon = t?.isPlaying ? '<i class="ri-pause-fill"></i>' : '<i class="ri-play-fill"></i>'
+  $('btn-play').innerHTML = playIcon
+  $('cover-play').innerHTML = playIcon
+  document.body.classList.toggle('idle', !t)
+  $('btn-cover').innerHTML = `<i class="${u.cover ? 'ri-fullscreen-exit-line' : 'ri-fullscreen-line'}"></i>`
+  $('btn-cover').title = u.cover ? 'Back to player (F or Space)' : 'Cover mode (F or Space)'
   viz.playing = !!t?.isPlaying
   const red = !!t && t.source !== 'spotify' && t.source !== 'tidal'
   document.documentElement.dataset.source = t?.source ?? 'spotify'
@@ -339,6 +371,62 @@ player.addEventListener('mousedown', (e) => {
 })
 player.addEventListener('auxclick', (e) => {
   if (e.button === 1) void api.togglePlay()
+})
+
+// Cover mode
+function toggleCover(): void {
+  if (!coverMode) toggleAlbums(false)
+  void api.setCover(!coverMode)
+}
+$('btn-cover').addEventListener('click', toggleCover)
+// F or Space switches between the player and cover mode (not while typing, e.g. in the Client ID box)
+window.addEventListener('keydown', (e) => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || player.hidden) return
+  if (e.key !== 'f' && e.key !== 'F' && e.key !== ' ') return
+  const el = e.target as HTMLElement
+  if (el.closest('input:not([type=range]), textarea')) return
+  e.preventDefault() // otherwise Space would also "click" whichever button has focus
+  toggleCover()
+})
+$('cover-prev').addEventListener('click', () => void api.previous())
+$('cover-play').addEventListener('click', () => void api.togglePlay())
+$('cover-next').addEventListener('click', () => void api.next())
+
+/** Drags the window (or resizes it from a corner) by streaming pointer deltas to the main process */
+function startGesture(e: PointerEvent, kind: 'move' | 'nw' | 'ne' | 'sw' | 'se'): void {
+  if (e.button !== 0) return
+  e.preventDefault() // stops the browser starting a native image/selection drag, which would cancel this gesture
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture(e.pointerId)
+  const sx = e.screenX
+  const sy = e.screenY
+  let pending = false
+  let last: [number, number] = [0, 0]
+  void api.gestureStart(kind)
+  const move = (m: PointerEvent) => {
+    last = [m.screenX - sx, m.screenY - sy]
+    if (pending) return
+    pending = true
+    requestAnimationFrame(() => {
+      pending = false
+      void api.gestureMove(...last)
+    })
+  }
+  const end = () => {
+    el.removeEventListener('pointermove', move)
+    el.removeEventListener('pointerup', end)
+    el.removeEventListener('pointercancel', end)
+    void api.gestureMove(...last).then(() => api.gestureEnd())
+  }
+  el.addEventListener('pointermove', move)
+  el.addEventListener('pointerup', end)
+  el.addEventListener('pointercancel', end)
+}
+$('art-wrap').addEventListener('pointerdown', (e) => {
+  if (coverMode && !(e.target as HTMLElement).closest('button, .handle')) startGesture(e, 'move')
+})
+document.querySelectorAll<HTMLElement>('.handle').forEach((h) => {
+  h.addEventListener('pointerdown', (e) => startGesture(e, h.dataset.corner as 'nw' | 'ne' | 'sw' | 'se'))
 })
 
 api.onUpdate(render)

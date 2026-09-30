@@ -8,6 +8,8 @@ export interface Settings {
   windowY?: number
   opacity?: number
   ytmAnyBrowser?: boolean
+  coverMode?: boolean
+  coverSize?: number
 }
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json')

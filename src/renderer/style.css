@@ -5,7 +5,7 @@
 :root[data-source="tidal"] { --green: #00d4ff; --green-hover: #4de1ff; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font: 13px "Segoe UI", sans-serif; color: var(--fg); user-select: none; }
-#app { height: 100%; background: var(--bg); border-radius: 12px; padding: 8px 12px; overflow: hidden; }
+#app { transition: padding .26s cubic-bezier(.645,.045,.355,1); height: 100%; background: var(--bg); border-radius: 12px; padding: 8px 12px; overflow: hidden; }
 [hidden] { display: none !important; }
 button { background: none; border: 0; color: var(--fg); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 6px; -webkit-app-region: no-drag; }
 button i { display: block; line-height: 1; }
@@ -13,9 +13,10 @@ button:hover { background: rgba(255,255,255,.12); }
 .drag { -webkit-app-region: drag; }
 .top { display: flex; justify-content: space-between; align-items: center; height: 18px; color: var(--dim); font-size: 11px; }
 .win-btns button { font-size: 14px; padding: 0 6px; }
-.row { display: flex; gap: 12px; height: 134px; }
-#art { width: 134px; height: 134px; border-radius: 8px; background: #333; object-fit: cover; flex: none; }
-.right { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+.row { position: relative; display: flex; gap: 12px; height: 134px; transition: height .26s cubic-bezier(.645,.045,.355,1); }
+#art-wrap { position: relative; z-index: 1; width: 134px; height: 134px; flex: none; transition: width .26s cubic-bezier(.645,.045,.355,1), height .26s cubic-bezier(.645,.045,.355,1); }
+#art { display: block; width: 134px; height: 134px; border-radius: 8px; transition: width .26s cubic-bezier(.645,.045,.355,1), height .26s cubic-bezier(.645,.045,.355,1), border-radius .26s cubic-bezier(.645,.045,.355,1); background: #333; object-fit: cover; flex: none; }
+.right { position: absolute; left: 146px; right: 0; top: 0; bottom: 0; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; transition: transform .25s ease .2s, opacity .25s ease .2s; }
 .info { min-width: 0; }
 .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .artist { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -56,3 +57,42 @@ input[type=range]:disabled { opacity: .35; }
 #ext-help code { background: #2a2a2a; padding: 1px 4px; border-radius: 4px; color: var(--fg); user-select: text; }
 .ext-actions { display: flex; gap: 8px; }
 .ext-actions button { background: #2a2a2a; font-size: 12px; padding: 5px 10px; }
+
+/* Cover mode: a square window showing only the album art, controls on hover */
+#btn-cover { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; padding: 0; font-size: 20px; border-radius: 8px; background: rgba(0,0,0,.6); color: #fff; opacity: 0; transition: opacity .15s, background .15s; }
+/* Invisible extra hit area so the button is easy to hit */
+#btn-cover::after { content: ''; position: absolute; inset: -8px; }
+#btn-cover:hover { background: rgba(0,0,0,.85); }
+#btn-cover:hover i { transform: scale(1.1); }
+#art-wrap:hover #btn-cover { opacity: 1; }
+#cover-controls, #cover-info, .handle, #wave-radial { display: none; }
+#art { -webkit-user-drag: none; }
+body.cover #app { padding: 0; transition-delay: .15s; }
+body.cover #player, body.cover .row { height: 100%; }
+body.cover .row { transition-delay: .15s; }
+body.cover .row { gap: 0; }
+body.cover #albums, body.cover #error, body.cover #ext-help { display: none; }
+body.cover #art-wrap { width: 100%; height: 100%; transition-delay: .15s; }
+/* Entering cover: the text slides out underneath the art first, then the art takes over */
+body.cover .right { transform: translateX(-130px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .22s ease, opacity .22s ease, visibility 0s .22s; }
+body.cover #art { width: 100%; height: 100%; border-radius: 0; cursor: move; transition-delay: .15s; }
+body.cover #wave-radial { display: block; mix-blend-mode: difference; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+body.cover #cover-controls { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .15s; pointer-events: none; }
+body.cover #cover-controls button { pointer-events: auto; font-size: 28px; padding: 8px; border-radius: 50%; background: rgba(0,0,0,.45); }
+body.cover #cover-controls button:hover { background: var(--green); color: #000; }
+body.cover #cover-play { font-size: 40px; }
+body.cover #cover-info { display: block; position: absolute; z-index: 4; top: 0; left: 0; right: 0; padding: 8px 34px 18px 10px; background: linear-gradient(rgba(0,0,0,.7), transparent); opacity: 0; transition: opacity .15s; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+#cover-title { font-size: 20px; font-weight: 700; line-height: 1.25; color: #fff; }
+#cover-artist { font-size: 15px; line-height: 1.3; color: rgba(255,255,255,.85); }
+/* Text that does not fit scrolls back and forth (see marquee() in main.ts) */
+.marquee { overflow: hidden; white-space: nowrap; }
+.marquee span { display: inline-block; }
+.marquee.scroll span { animation: marquee var(--dur) ease-in-out infinite; }
+@keyframes marquee { 0%, 15% { transform: translateX(0); } 45%, 60% { transform: translateX(var(--shift)); } 90%, 100% { transform: translateX(0); } }
+body.cover #art-wrap:hover #cover-controls, body.cover.idle #cover-controls, body.cover #art-wrap:hover #cover-info, body.cover.idle #cover-info { opacity: 1; }
+body.cover #btn-cover { z-index: 5; }
+body.cover .handle { display: block; position: absolute; width: 18px; height: 18px; z-index: 3; }
+.handle.nw { top: 0; left: 0; cursor: nwse-resize; }
+.handle.se { bottom: 0; right: 0; cursor: nwse-resize; }
+.handle.ne { top: 0; right: 0; cursor: nesw-resize; }
+.handle.sw { bottom: 0; left: 0; cursor: nesw-resize; }

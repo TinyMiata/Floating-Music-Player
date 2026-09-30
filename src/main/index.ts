@@ -8,12 +8,15 @@ import { SmtcBridge } from './smtc'
 import { classify, isBrowserId, type MediaSession, type SourceKind } from './classify'
 import { BrowserBridge, type ExtTab } from './bridge'
 import { detectDefaultBrowser, EXTENSIONS_URL, openInBrowser } from './browser'
+import { clampSize, COVER_DEFAULT, resizeSquare, type Corner, type Square } from './cover'
 import type { AuthStatus, ExtInstallInfo, PlayerUpdate, TrackState } from '../shared/types'
 
 const COMPACT = { width: 380, height: 150 }
 const EXPANDED = { width: 380, height: 430 }
 
 let win: BrowserWindow | null = null
+let coverMode = false
+let gesture: { kind: 'move' | Corner; start: Electron.Rectangle } | null = null
 let tray: Tray | null = null
 let spotifyTrack: TrackState | null = null
 let sessions: MediaSession[] = []
@@ -136,7 +139,7 @@ function extensionNeeded(): boolean {
 function snapshot(): PlayerUpdate {
   const active = pickActive()
   const showError = !active || active.backend === 'api'
-  return { auth: authStatus(), track: active?.track ?? null, error: showError ? lastError : null, extension: !!browser?.connected, extensionNeeded: extensionNeeded() }
+  return { auth: authStatus(), track: active?.track ?? null, error: showError ? lastError : null, extension: !!browser?.connected, extensionNeeded: extensionNeeded(), cover: coverMode }
 }
 
 function push(): void {
@@ -202,12 +205,40 @@ async function control(fn: () => Promise<unknown>, optimistic?: () => void): Pro
   push()
 }
 
+const COVER_ENTER_DELAY_MS = 150
+const COVER_ANIM_MS = 260
+let boundsTimer: NodeJS.Timeout | null = null
+
+/** Windows can't animate a window resize by itself, so step the bounds (same easing as the page's CSS transitions) */
+function animateBounds(to: Electron.Rectangle, delayMs: number): void {
+  if (boundsTimer) clearInterval(boundsTimer)
+  const ease = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
+  const lerp = (a: number, b: number, e: number) => Math.round(a + (b - a) * e)
+  const begin = Date.now() + delayMs
+  win?.setResizable(true)
+  const from = win?.getBounds()
+  if (!from) return
+  boundsTimer = setInterval(() => {
+    if (!win) return void (boundsTimer && clearInterval(boundsTimer))
+    const p = Math.max(0, Math.min(1, (Date.now() - begin) / COVER_ANIM_MS))
+    const e = ease(p)
+    win.setBounds({ x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), width: lerp(from.width, to.width, e), height: lerp(from.height, to.height, e) })
+    if (p >= 1) {
+      if (boundsTimer) clearInterval(boundsTimer)
+      boundsTimer = null
+      win.setResizable(false)
+    }
+  }, 8)
+}
+
 function createWindow(): void {
   const settings = loadSettings()
   const area = screen.getPrimaryDisplay().workArea
+  coverMode = !!settings.coverMode
+  const size = coverMode ? { width: clampSize(settings.coverSize ?? COVER_DEFAULT), height: clampSize(settings.coverSize ?? COVER_DEFAULT) } : COMPACT
   win = new BrowserWindow({
-    ...COMPACT,
-    x: settings.windowX ?? area.x + area.width - COMPACT.width - 20,
+    ...size,
+    x: settings.windowX ?? area.x + area.width - size.width - 20,
     y: settings.windowY ?? area.y + 20,
     frame: false,
     transparent: true,
@@ -386,6 +417,7 @@ function registerIpc(): void {
   ipcMain.handle('library:play', (_, uri: string) => control(() => spotify.playContext(uri)))
 
   ipcMain.handle('window:expand', (_, expanded: boolean) => {
+    if (coverMode) return
     const size = expanded ? EXPANDED : COMPACT
     win?.setResizable(true)
     win?.setSize(size.width, size.height)
@@ -397,6 +429,47 @@ function registerIpc(): void {
       const y = Math.max(area.y, Math.min(b.y, area.y + area.height - b.height))
       if (y !== b.y) win.setPosition(b.x, y)
     }
+  })
+  ipcMain.handle('window:cover', (_, on: boolean) => {
+    if (!win || on === coverMode) return
+    coverMode = on
+    const side = clampSize(loadSettings().coverSize ?? COVER_DEFAULT)
+    const size = on ? { width: side, height: side } : COMPACT
+    const b = win.getBounds()
+    const area = screen.getDisplayMatching(b).workArea
+    const target = {
+      x: Math.max(area.x, Math.min(b.x, area.x + area.width - size.width)),
+      y: Math.max(area.y, Math.min(b.y, area.y + area.height - size.height)),
+      ...size
+    }
+    saveSettings({ coverMode: on, windowX: target.x, windowY: target.y })
+    push() // the page starts its own transitions now
+    // Entering: let the text slide away under the art first, then grow. Leaving: shrink first, the text slides back after.
+    animateBounds(target, on ? COVER_ENTER_DELAY_MS : 0)
+  })
+  // Dragging and corner-resizing are done here (not with -webkit-app-region) so clicks, wheel and the context menu still reach the page
+  ipcMain.handle('window:gesture-start', (_, kind: 'move' | Corner) => {
+    if (!win) return
+    gesture = { kind, start: win.getBounds() }
+    win.setResizable(true)
+  })
+  ipcMain.handle('window:gesture-move', (_, dx: number, dy: number) => {
+    if (!win || !gesture) return
+    const { kind, start } = gesture
+    if (kind === 'move') {
+      win.setBounds({ x: Math.round(start.x + dx), y: Math.round(start.y + dy), width: start.width, height: start.height })
+      return
+    }
+    if (!coverMode) return
+    const sq: Square = resizeSquare({ x: start.x, y: start.y, size: start.width }, kind, dx, dy)
+    win.setBounds({ x: sq.x, y: sq.y, width: sq.size, height: sq.size })
+  })
+  ipcMain.handle('window:gesture-end', () => {
+    if (!win || !gesture) return
+    gesture = null
+    win.setResizable(false)
+    const b = win.getBounds()
+    saveSettings({ windowX: b.x, windowY: b.y, ...(coverMode ? { coverSize: b.width } : {}) })
   })
   ipcMain.handle('window:opacity', (_, v: number) => {
     const opacity = Math.max(0.3, Math.min(1, v))

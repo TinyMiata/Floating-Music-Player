@@ -38,6 +38,8 @@ export interface PlayerUpdate {
   extension: boolean
   /** True when browser media is playing but the extension is not connected (so installing it would help) */
   extensionNeeded: boolean
+  /** True while the window is in cover mode (square, album art only) */
+  cover: boolean
 }
 
 export interface ExtInstallInfo {
@@ -65,6 +67,12 @@ export interface FloatingApi {
   listLibrary(): Promise<AlbumItem[]>
   playContext(uri: string): Promise<void>
   setExpanded(expanded: boolean): Promise<void>
+  /** Switches between the normal player and the square album-art-only cover mode */
+  setCover(on: boolean): Promise<void>
+  /** Starts dragging the window ('move') or resizing it from a corner; deltas are then sent with gestureMove */
+  gestureStart(kind: 'move' | 'nw' | 'ne' | 'sw' | 'se'): Promise<void>
+  gestureMove(dx: number, dy: number): Promise<void>
+  gestureEnd(): Promise<void>
   setOpacity(value: number): Promise<void>
   showSetup(): Promise<void>
   /** Prepares the extension folder, opens the default browser's extensions page, and reports what it did */

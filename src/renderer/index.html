@@ -17,7 +17,21 @@
 
       <section id="player" hidden>
         <div class="row">
-          <img id="art" alt="" />
+          <div id="art-wrap">
+            <img id="art" alt="" draggable="false" />
+            <canvas id="wave-radial"></canvas>
+            <div id="cover-info"><div id="cover-title" class="marquee"><span></span></div><div id="cover-artist" class="marquee"><span></span></div></div>
+            <div id="cover-controls">
+              <button id="cover-prev" title="Previous"><i class="ri-skip-back-fill"></i></button>
+              <button id="cover-play" title="Play / Pause"><i class="ri-play-fill"></i></button>
+              <button id="cover-next" title="Next"><i class="ri-skip-forward-fill"></i></button>
+            </div>
+            <button id="btn-cover" title="Cover mode"><i class="ri-fullscreen-line"></i></button>
+            <span class="handle nw" data-corner="nw"></span>
+            <span class="handle ne" data-corner="ne"></span>
+            <span class="handle sw" data-corner="sw"></span>
+            <span class="handle se" data-corner="se"></span>
+          </div>
           <div class="right">
             <div class="drag top">
               <span id="device"></span>
