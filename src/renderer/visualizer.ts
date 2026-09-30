@@ -10,6 +10,10 @@ export class Visualizer {
   private lastAttempt = 0
   private silentFrames = 0
   playing = false
+  /** Follow only the playing app's audio (fed in by the main process) instead of everything the PC plays */
+  scoped = false
+  private feedData: Uint8Array | null = null
+  private feedAt = 0
   /** Draw the radial ring on the cover canvas instead of the flat bars */
   radial = false
   /** [bottom, top] gradient colors */
@@ -28,6 +32,12 @@ export class Visualizer {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => void this.connect(), 800)
     })
+  }
+
+  /** A spectrum frame from the per-app capture */
+  feed(bins: Uint8Array): void {
+    this.feedData = bins
+    this.feedAt = performance.now()
   }
 
   private teardown(): void {
@@ -67,7 +77,7 @@ export class Visualizer {
 
   /** Reconnects when capture is missing, or stays silent while music plays (e.g. the output device was swapped) */
   private watchdog(): void {
-    if (this.connecting || Date.now() - this.lastAttempt < 5000) return
+    if (this.scoped || this.connecting || Date.now() - this.lastAttempt < 5000) return
     if (!this.analyser) {
       if (this.playing) void this.connect()
       return
@@ -79,6 +89,11 @@ export class Visualizer {
 
   /** Spectrum value 0..1 for bar i of n, or a synthetic wobble while no audio is being captured */
   private level(i: number, n: number): number {
+    if (this.scoped) {
+      // A frame that hasn't been refreshed lately means the app is silent (silent frames aren't re-sent)
+      if (!this.feedData || performance.now() - this.feedAt > 250) return 0
+      return this.feedData[Math.floor((i / n) * this.feedData.length * 0.7)] / 255
+    }
     if (this.analyser && this.data.length) {
       // use lower ~70% of the spectrum, where music energy lives
       return this.data[Math.floor((i / n) * this.data.length * 0.7)] / 255

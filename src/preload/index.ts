@@ -10,6 +10,11 @@ const api: FloatingApi = {
     ipcRenderer.on('player:update', handler)
     return () => ipcRenderer.removeListener('player:update', handler)
   },
+  onSpectrum: (cb) => {
+    const handler = (_: unknown, b: Uint8Array) => cb(b)
+    ipcRenderer.on('audio:spectrum', handler)
+    return () => ipcRenderer.removeListener('audio:spectrum', handler)
+  },
   setClientId: (id) => invoke('auth:client-id', id),
   login: () => invoke('auth:login'),
   logout: () => invoke('auth:logout'),

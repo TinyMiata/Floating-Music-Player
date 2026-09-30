@@ -5,6 +5,7 @@ import { clearTokens, getClientId, loadSettings, loadTokens, saveSettings } from
 import { login } from './auth'
 import * as spotify from './spotify'
 import { SmtcBridge } from './smtc'
+import { AudioTap } from './audiotap'
 import { classify, isBrowserId, type MediaSession, type SourceKind } from './classify'
 import { BrowserBridge, type ExtTab } from './bridge'
 import { detectDefaultBrowser, EXTENSIONS_URL, openInBrowser } from './browser'
@@ -22,6 +23,7 @@ let spotifyTrack: TrackState | null = null
 let sessions: MediaSession[] = []
 let activeKey: string | null = null
 let smtc: SmtcBridge | null = null
+let audioTap: AudioTap | null = null
 let browser: BrowserBridge | null = null
 let lastError: string | null = null
 let pollTimer: NodeJS.Timeout | null = null
@@ -136,10 +138,26 @@ function extensionNeeded(): boolean {
   return Date.now() - extMissingSince > EXT_GRACE_MS
 }
 
+const BROWSER_EXES = ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'arc.exe']
+
+/** Which apps' audio the visualizer should follow, or null when that can't be told (it then hears the whole PC) */
+function audioTargets(c: Candidate | null): string[] | null {
+  if (!c) return null
+  if (c.backend === 'api') return ['Spotify.exe']
+  if (c.backend === 'ext') return BROWSER_EXES
+  const id = c.appId ?? ''
+  if (/spotify/i.test(id)) return ['Spotify.exe']
+  if (/tidal/i.test(id)) return ['TIDAL.exe']
+  if (isBrowserId(id)) return BROWSER_EXES
+  return /\.exe$/i.test(id) ? [id] : null
+}
+
 function snapshot(): PlayerUpdate {
   const active = pickActive()
+  const targets = audioTargets(active)
+  audioTap?.setTargets(targets ?? [])
   const showError = !active || active.backend === 'api'
-  return { auth: authStatus(), track: active?.track ?? null, error: showError ? lastError : null, extension: !!browser?.connected, extensionNeeded: extensionNeeded(), cover: coverMode }
+  return { auth: authStatus(), track: active?.track ?? null, error: showError ? lastError : null, extension: !!browser?.connected, extensionNeeded: extensionNeeded(), cover: coverMode, scoped: !!targets }
 }
 
 function push(): void {
@@ -503,6 +521,7 @@ app.whenReady().then(() => {
   createWindow()
   createTray()
   startPolling()
+  audioTap = new AudioTap((bins) => win?.webContents.send('audio:spectrum', bins))
   smtc = new SmtcBridge((s) => {
     sessions = s
     push()

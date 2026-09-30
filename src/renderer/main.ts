@@ -84,6 +84,7 @@ function render(u: PlayerUpdate): void {
   coverMode = u.cover
   document.body.classList.toggle('cover', u.cover)
   viz.radial = u.cover
+  viz.scoped = u.scoped
   const needsSetup = u.auth !== 'logged-in' && (forceSetup || (!u.track && !skipped))
   if (needsSetup && u.cover) void api.setCover(false) // the setup form doesn't fit a square
   setup.hidden = !needsSetup
@@ -429,6 +430,7 @@ document.querySelectorAll<HTMLElement>('.handle').forEach((h) => {
   h.addEventListener('pointerdown', (e) => startGesture(e, h.dataset.corner as 'nw' | 'ne' | 'sw' | 'se'))
 })
 
+api.onSpectrum((bins) => viz.feed(bins))
 api.onUpdate(render)
 void api.getUpdate().then(render)
 requestAnimationFrame(tick)

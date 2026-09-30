@@ -40,6 +40,8 @@ export interface PlayerUpdate {
   extensionNeeded: boolean
   /** True while the window is in cover mode (square, album art only) */
   cover: boolean
+  /** True when the visualizer follows only the playing app's audio (rather than everything the PC plays) */
+  scoped: boolean
 }
 
 export interface ExtInstallInfo {
@@ -54,6 +56,8 @@ export interface ExtInstallInfo {
 export interface FloatingApi {
   getUpdate(): Promise<PlayerUpdate>
   onUpdate(cb: (u: PlayerUpdate) => void): () => void
+  /** 128 spectrum bytes (Web Audio analyser scaling) of the playing app's audio only */
+  onSpectrum(cb: (bins: Uint8Array) => void): () => void
   setClientId(id: string): Promise<void>
   login(): Promise<void>
   logout(): Promise<void>
